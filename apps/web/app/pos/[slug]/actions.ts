@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { startOfBusinessDay } from "@/lib/business-day";
 import { readSession } from "@/lib/session";
+import { getStripe } from "@/lib/stripe";
 
 export type CartLineInput = {
   itemId: string;
@@ -14,11 +15,13 @@ export type CartLineInput = {
   quantity: number;
 };
 
+export type PaymentMethod = "cash" | "card";
+
 export type CreateOrderInput = {
   businessSlug: string;
   lines: CartLineInput[];
   tipCents: number;
-  paymentMethod: "cash";
+  paymentMethod: PaymentMethod;
 };
 
 const dec = (cents: number) => new Prisma.Decimal(cents).div(100);
@@ -143,8 +146,35 @@ export async function createOrder(input: CreateOrderInput) {
     where: { businessId: business.id, createdAt: { gte: dayStart } },
   });
 
-  const order = await db.$transaction(async (tx) => {
-    return tx.order.create({
+  const isCard = input.paymentMethod === "card";
+
+  // Card path needs Stripe configured. Fail fast before we write anything.
+  let stripe: ReturnType<typeof getStripe> = null;
+  if (isCard) {
+    stripe = getStripe();
+    if (!stripe) {
+      throw new Error(
+        "Card payments require STRIPE_SECRET_KEY in apps/web/.env.local",
+      );
+    }
+  }
+
+  const orderLineCreates = rows.map((r) => ({
+    itemId: r.itemId,
+    variantId: r.variantId,
+    quantity: r.quantity,
+    unitPrice: dec(r.unitPriceCents),
+    lineTotal: dec(r.lineTotalCents),
+    modifiers: {
+      create: r.selectedModifiers.map((m) => ({
+        modifierId: m.id,
+        priceDelta: dec(m.priceDeltaCents),
+      })),
+    },
+  }));
+
+  if (!isCard) {
+    const order = await db.order.create({
       data: {
         businessId: business.id,
         locationId: business.locations[0]?.id ?? null,
@@ -157,32 +187,58 @@ export async function createOrder(input: CreateOrderInput) {
         discount: dec(totals.discountCents),
         total: dec(totals.totalCents),
         closedAt: new Date(),
-        lines: {
-          create: rows.map((r) => ({
-            itemId: r.itemId,
-            variantId: r.variantId,
-            quantity: r.quantity,
-            unitPrice: dec(r.unitPriceCents),
-            lineTotal: dec(r.lineTotalCents),
-            modifiers: {
-              create: r.selectedModifiers.map((m) => ({
-                modifierId: m.id,
-                priceDelta: dec(m.priceDeltaCents),
-              })),
-            },
-          })),
-        },
+        lines: { create: orderLineCreates },
         payments: {
           create: {
-            method: input.paymentMethod,
+            method: "cash",
             amount: dec(totals.totalCents),
             status: "succeeded",
           },
         },
       },
     });
+    revalidatePath(`/admin/${input.businessSlug}` as never);
+    redirect(`/pos/${input.businessSlug}/receipt/${order.id}` as never);
+  }
+
+  // Card path: open the order, mint a PaymentIntent, hand off to checkout.
+  const order = await db.order.create({
+    data: {
+      businessId: business.id,
+      locationId: business.locations[0]?.id ?? null,
+      staffId: session.staffId,
+      number: todaysCount + 1,
+      status: "open",
+      subtotal: dec(totals.subtotalCents),
+      tax: dec(totals.taxCents),
+      tip: dec(totals.tipCents),
+      discount: dec(totals.discountCents),
+      total: dec(totals.totalCents),
+      lines: { create: orderLineCreates },
+    },
   });
 
-  revalidatePath(`/admin/${input.businessSlug}` as never);
-  redirect(`/pos/${input.businessSlug}/receipt/${order.id}` as never);
+  const intent = await stripe!.paymentIntents.create({
+    amount: totals.totalCents,
+    currency: business.currency.toLowerCase(),
+    payment_method_types: ["card_present"],
+    capture_method: "automatic",
+    metadata: {
+      dearpos_order_id: order.id,
+      dearpos_business_id: business.id,
+      dearpos_business_slug: business.slug,
+    },
+  });
+
+  await db.payment.create({
+    data: {
+      orderId: order.id,
+      method: "card",
+      amount: dec(totals.totalCents),
+      status: "pending",
+      stripePaymentIntentId: intent.id,
+    },
+  });
+
+  redirect(`/pos/${input.businessSlug}/checkout/${order.id}` as never);
 }

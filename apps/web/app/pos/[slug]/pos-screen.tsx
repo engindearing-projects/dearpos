@@ -54,6 +54,7 @@ type Business = {
   taxRate: number;
   tipSuggestions: number[];
   primaryAction: "ringUp" | "openTable";
+  cardPaymentsAvailable: boolean;
 };
 
 type Staff = {
@@ -157,13 +158,13 @@ export function POSScreen({
     setChargeError(null);
   }
 
-  function handleCharge() {
+  function handleCharge(method: "cash" | "card") {
     setChargeError(null);
     startCharging(async () => {
       try {
         await createOrder({
           businessSlug: business.slug,
-          paymentMethod: "cash",
+          paymentMethod: method,
           tipCents,
           lines: cart.map((line) => ({
             itemId: line.item.id,
@@ -425,21 +426,37 @@ export function POSScreen({
                 </div>
               </dl>
 
-              <button
-                onClick={handleCharge}
-                disabled={isCharging}
-                className="mt-4 w-full rounded-lg bg-[color:var(--color-accent)] py-3 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-60"
-              >
-                {isCharging ? "Charging…" : `Charge ${fmt(totalCents)} · Cash`}
-              </button>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleCharge("cash")}
+                  disabled={isCharging}
+                  className="rounded-lg border border-[color:var(--color-foreground)]/15 py-3 text-sm font-semibold hover:bg-[color:var(--color-foreground)]/5 disabled:opacity-60"
+                >
+                  {isCharging ? "…" : `Cash · ${fmt(totalCents)}`}
+                </button>
+                <button
+                  onClick={() => handleCharge("card")}
+                  disabled={isCharging || !business.cardPaymentsAvailable}
+                  title={
+                    business.cardPaymentsAvailable
+                      ? undefined
+                      : "Set STRIPE_SECRET_KEY in apps/web/.env.local to enable card payments"
+                  }
+                  className="rounded-lg bg-[color:var(--color-accent)] py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-60"
+                >
+                  {isCharging ? "…" : `Card · ${fmt(totalCents)}`}
+                </button>
+              </div>
               {chargeError && (
                 <p className="mt-2 text-center text-xs text-red-600">
                   {chargeError}
                 </p>
               )}
-              <p className="mt-2 text-center text-[10px] text-[color:var(--color-muted)]">
-                Stripe Terminal checkout wired in next
-              </p>
+              {!business.cardPaymentsAvailable && (
+                <p className="mt-2 text-center text-[10px] text-[color:var(--color-muted)]">
+                  Card disabled — STRIPE_SECRET_KEY not set
+                </p>
+              )}
             </div>
           )}
         </aside>

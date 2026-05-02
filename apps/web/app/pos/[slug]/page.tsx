@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getProfile } from "@dearpos/core/profiles";
 import { POSScreen } from "./pos-screen";
 import { readSession } from "@/lib/session";
+import { getStripe } from "@/lib/stripe";
 
 export default async function POSPage({
   params,
@@ -84,6 +85,7 @@ export default async function POSPage({
         taxRate: Number(business.taxRate),
         tipSuggestions: profile.defaults.tipSuggestions,
         primaryAction: profile.ui.primaryAction,
+        cardPaymentsAvailable: Boolean(getStripe()),
       }}
       staff={staff}
       items={serializedItems}
