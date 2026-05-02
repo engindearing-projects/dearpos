@@ -1,19 +1,28 @@
+import Link from "next/link";
 import { db } from "@dearpos/db";
 import { notFound } from "next/navigation";
 import { fmtMoney, fmtMoneyDelta } from "@/lib/format";
 
 export default async function ItemsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ inactive?: string }>;
 }) {
   const { slug } = await params;
+  const { inactive } = await searchParams;
+  const showInactive = inactive === "1";
+
   const business = await db.business.findUnique({ where: { slug } });
   if (!business) notFound();
 
   const items = await db.item.findMany({
-    where: { businessId: business.id, active: true },
-    orderBy: [{ category: "asc" }, { sortOrder: "asc" }],
+    where: {
+      businessId: business.id,
+      ...(showInactive ? {} : { active: true }),
+    },
+    orderBy: [{ active: "desc" }, { category: "asc" }, { sortOrder: "asc" }],
     include: {
       variants: { orderBy: { sortOrder: "asc" } },
       modifierGroups: {
@@ -31,11 +40,24 @@ export default async function ItemsPage({
 
   return (
     <section>
-      <header className="mb-6 flex items-baseline justify-between">
-        <h2 className="text-xl font-semibold">Items</h2>
-        <span className="text-sm text-[color:var(--color-muted)]">
-          {items.length} active
-        </span>
+      <header className="mb-6 flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-xl font-semibold">Items</h2>
+          <Link
+            href={
+              `/admin/${slug}/items${showInactive ? "" : "?inactive=1"}` as never
+            }
+            className="text-xs text-[color:var(--color-muted)] underline-offset-4 hover:underline"
+          >
+            {showInactive ? "Hide inactive" : "Show inactive"}
+          </Link>
+        </div>
+        <Link
+          href={`/admin/${slug}/items/new` as never}
+          className="rounded-lg bg-[color:var(--color-foreground)] px-4 py-2 text-sm font-semibold text-[color:var(--color-background)] hover:opacity-90"
+        >
+          + New item
+        </Link>
       </header>
 
       <div className="space-y-8">
@@ -48,7 +70,19 @@ export default async function ItemsPage({
               {list.map((item) => (
                 <li key={item.id} className="grid grid-cols-12 gap-3 px-5 py-4">
                   <div className="col-span-7">
-                    <div className="font-medium">{item.name}</div>
+                    <div className="flex items-baseline gap-2">
+                      <Link
+                        href={`/admin/${slug}/items/${item.id}` as never}
+                        className="font-medium underline-offset-4 hover:underline"
+                      >
+                        {item.name}
+                      </Link>
+                      {!item.active && (
+                        <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-rose-700">
+                          inactive
+                        </span>
+                      )}
+                    </div>
                     {item.description && (
                       <div className="mt-0.5 text-sm text-[color:var(--color-muted)]">
                         {item.description}
