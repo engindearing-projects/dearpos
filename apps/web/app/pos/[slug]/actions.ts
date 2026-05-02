@@ -21,6 +21,8 @@ export type CreateOrderInput = {
   businessSlug: string;
   lines: CartLineInput[];
   tipCents: number;
+  discountCents: number;
+  discountReason: string | null;
   paymentMethod: PaymentMethod;
 };
 
@@ -129,7 +131,14 @@ export async function createOrder(input: CreateOrderInput) {
     };
   });
 
+  if (!Number.isFinite(input.discountCents) || input.discountCents < 0) {
+    throw new Error("Discount must be a non-negative amount");
+  }
+
   const taxRate = Number(business.taxRate);
+  const subtotalForCap = rows.reduce((s, r) => s + r.lineTotalCents, 0);
+  const safeDiscountCents = Math.min(input.discountCents, subtotalForCap);
+
   const totals = computeTotals({
     lines: rows.map((r) => ({
       unitPriceCents: r.unitPriceCents,
@@ -139,6 +148,7 @@ export async function createOrder(input: CreateOrderInput) {
     })),
     taxRate,
     tipCents: input.tipCents,
+    discountCents: safeDiscountCents,
   });
 
   const dayStart = startOfBusinessDay(new Date(), business.timezone);
@@ -185,6 +195,9 @@ export async function createOrder(input: CreateOrderInput) {
         tax: dec(totals.taxCents),
         tip: dec(totals.tipCents),
         discount: dec(totals.discountCents),
+        notes: input.discountReason
+          ? `discount: ${input.discountReason}`
+          : null,
         total: dec(totals.totalCents),
         closedAt: new Date(),
         lines: { create: orderLineCreates },

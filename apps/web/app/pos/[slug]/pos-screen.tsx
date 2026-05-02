@@ -113,6 +113,12 @@ export function POSScreen({
   const [cart, setCart] = useState<CartLine[]>([]);
   const [configuringItem, setConfiguringItem] = useState<Item | null>(null);
   const [tipPercent, setTipPercent] = useState<number | null>(null);
+  const [discount, setDiscount] = useState<{
+    type: "percent" | "amount";
+    value: number; // percent: 0..1, amount: cents
+    reason: string;
+  } | null>(null);
+  const [discountOpen, setDiscountOpen] = useState(false);
   const [isCharging, startCharging] = useTransition();
   const [chargeError, setChargeError] = useState<string | null>(null);
 
@@ -122,10 +128,19 @@ export function POSScreen({
     (s, l) => s + lineUnitCents(l) * l.quantity,
     0
   );
-  const taxCents = Math.round(subtotalCents * business.taxRate);
+  const rawDiscountCents = discount
+    ? discount.type === "percent"
+      ? Math.round(subtotalCents * discount.value)
+      : discount.value
+    : 0;
+  const discountCents = Math.min(rawDiscountCents, subtotalCents);
+  const discountedSubtotalCents = subtotalCents - discountCents;
+  const taxCents = Math.round(discountedSubtotalCents * business.taxRate);
   const tipCents =
-    tipPercent !== null ? Math.round(subtotalCents * tipPercent) : 0;
-  const totalCents = subtotalCents + taxCents + tipCents;
+    tipPercent !== null
+      ? Math.round(discountedSubtotalCents * tipPercent)
+      : 0;
+  const totalCents = discountedSubtotalCents + taxCents + tipCents;
 
   function handleItemClick(item: Item) {
     if (item.variants.length > 0 || item.modifierGroups.length > 0) {
@@ -168,6 +183,7 @@ export function POSScreen({
   function clearCart() {
     setCart([]);
     setTipPercent(null);
+    setDiscount(null);
     setChargeError(null);
   }
 
@@ -179,6 +195,8 @@ export function POSScreen({
           businessSlug: business.slug,
           paymentMethod: method,
           tipCents,
+          discountCents,
+          discountReason: discount?.reason.trim() || null,
           lines: cart.map((line) => ({
             itemId: line.item.id,
             variantId: line.variant?.id ?? null,
@@ -425,11 +443,49 @@ export function POSScreen({
                 </div>
               )}
 
+              <div className="mb-3 flex items-center justify-between text-xs">
+                <button
+                  onClick={() => setDiscountOpen(true)}
+                  className={`rounded-md px-2.5 py-1 font-medium ${
+                    discount
+                      ? "border border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/10 text-[color:var(--color-accent)]"
+                      : "border border-[color:var(--color-foreground)]/15 hover:bg-[color:var(--color-foreground)]/5"
+                  }`}
+                >
+                  {discount
+                    ? discount.type === "percent"
+                      ? `Discount · ${(discount.value * 100).toFixed(0)}%`
+                      : `Discount · ${fmt(discount.value)}`
+                    : "Add discount"}
+                </button>
+                {discount && (
+                  <button
+                    onClick={() => setDiscount(null)}
+                    className="text-[color:var(--color-muted)] underline-offset-4 hover:underline"
+                  >
+                    clear
+                  </button>
+                )}
+              </div>
+
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-[color:var(--color-muted)]">Subtotal</dt>
                   <dd>{fmt(subtotalCents)}</dd>
                 </div>
+                {discountCents > 0 && (
+                  <div className="flex justify-between">
+                    <dt className="text-[color:var(--color-muted)]">
+                      Discount
+                      {discount?.reason && (
+                        <span className="ml-1 text-[10px] italic">
+                          · {discount.reason}
+                        </span>
+                      )}
+                    </dt>
+                    <dd>−{fmt(discountCents)}</dd>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <dt className="text-[color:var(--color-muted)]">Tax</dt>
                   <dd>{fmt(taxCents)}</dd>
@@ -499,6 +555,210 @@ export function POSScreen({
           onClose={() => setStartingCashOpen(false)}
         />
       )}
+
+      {discountOpen && (
+        <DiscountModal
+          subtotalCents={subtotalCents}
+          current={discount}
+          onCancel={() => setDiscountOpen(false)}
+          onApply={(d) => {
+            setDiscount(d);
+            setDiscountOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+type DiscountState = {
+  type: "percent" | "amount";
+  value: number;
+  reason: string;
+};
+
+function DiscountModal({
+  subtotalCents,
+  current,
+  onCancel,
+  onApply,
+}: {
+  subtotalCents: number;
+  current: DiscountState | null;
+  onCancel: () => void;
+  onApply: (d: DiscountState | null) => void;
+}) {
+  const [mode, setMode] = useState<"percent" | "amount">(
+    current?.type ?? "percent",
+  );
+  const [raw, setRaw] = useState(() => {
+    if (!current) return "";
+    return current.type === "percent"
+      ? (current.value * 100).toString()
+      : (current.value / 100).toFixed(2);
+  });
+  const [reason, setReason] = useState(current?.reason ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  const previewCents = (() => {
+    if (raw === "") return 0;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    if (mode === "percent") {
+      return Math.min(Math.round(subtotalCents * (n / 100)), subtotalCents);
+    }
+    return Math.min(Math.round(n * 100), subtotalCents);
+  })();
+
+  function apply() {
+    const trimmed = raw.trim();
+    if (trimmed === "") {
+      setError("Enter a value");
+      return;
+    }
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n <= 0) {
+      setError("Enter a positive number");
+      return;
+    }
+    if (mode === "percent" && n > 100) {
+      setError("Percentage can't exceed 100");
+      return;
+    }
+    onApply({
+      type: mode,
+      value: mode === "percent" ? n / 100 : Math.round(n * 100),
+      reason: reason.trim(),
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 px-6">
+      <div className="w-full max-w-sm rounded-2xl bg-[color:var(--color-background)] p-6 shadow-2xl">
+        <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold">
+          Discount
+        </h2>
+        <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+          Applied before tax · max {fmt(subtotalCents)}
+        </p>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setMode("percent")}
+            className={`rounded-md py-2 text-sm font-semibold ${
+              mode === "percent"
+                ? "bg-[color:var(--color-foreground)] text-[color:var(--color-background)]"
+                : "border border-[color:var(--color-foreground)]/15 hover:bg-[color:var(--color-foreground)]/5"
+            }`}
+          >
+            Percent
+          </button>
+          <button
+            onClick={() => setMode("amount")}
+            className={`rounded-md py-2 text-sm font-semibold ${
+              mode === "amount"
+                ? "bg-[color:var(--color-foreground)] text-[color:var(--color-background)]"
+                : "border border-[color:var(--color-foreground)]/15 hover:bg-[color:var(--color-foreground)]/5"
+            }`}
+          >
+            Dollars
+          </button>
+        </div>
+
+        {mode === "percent" && (
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
+            {[10, 15, 20, 50].map((p) => (
+              <button
+                key={p}
+                onClick={() => setRaw(String(p))}
+                className="rounded-md border border-[color:var(--color-foreground)]/15 py-1.5 text-sm hover:bg-[color:var(--color-foreground)]/5"
+              >
+                {p}%
+              </button>
+            ))}
+          </div>
+        )}
+
+        <label className="mt-4 block">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-muted)]">
+            {mode === "percent" ? "Percent" : "Amount"}
+          </span>
+          <div className="mt-1 flex items-baseline rounded-lg border border-[color:var(--color-foreground)]/15 bg-white/70 px-3">
+            {mode === "amount" && (
+              <span className="mr-1 text-xl font-medium text-[color:var(--color-muted)]">
+                $
+              </span>
+            )}
+            <input
+              type="text"
+              inputMode="decimal"
+              autoFocus
+              value={raw}
+              onChange={(e) => {
+                setError(null);
+                setRaw(e.target.value);
+              }}
+              placeholder={mode === "percent" ? "10" : "5.00"}
+              className="w-full bg-transparent py-2.5 text-2xl font-semibold tabular-nums focus:outline-none"
+            />
+            {mode === "percent" && (
+              <span className="ml-1 text-xl font-medium text-[color:var(--color-muted)]">
+                %
+              </span>
+            )}
+          </div>
+        </label>
+
+        <label className="mt-3 block">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-muted)]">
+            Reason (optional)
+          </span>
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="employee, comp, loyalty"
+            className="mt-1 block w-full rounded-lg border border-[color:var(--color-foreground)]/15 bg-white/70 px-3 py-2 text-sm focus:border-[color:var(--color-accent)] focus:outline-none"
+          />
+        </label>
+
+        <div className="mt-4 rounded-md bg-[color:var(--color-foreground)]/5 px-3 py-2 text-sm">
+          Preview · subtotal goes from{" "}
+          <span className="tabular-nums">{fmt(subtotalCents)}</span> to{" "}
+          <span className="font-semibold tabular-nums">
+            {fmt(subtotalCents - previewCents)}
+          </span>
+        </div>
+
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+        <div className="mt-5 flex justify-between gap-2">
+          {current ? (
+            <button
+              onClick={() => onApply(null)}
+              className="rounded-lg border border-[color:var(--color-foreground)]/15 px-4 py-2 text-sm hover:bg-[color:var(--color-foreground)]/5"
+            >
+              Remove
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={onCancel}
+              className="rounded-lg px-4 py-2 text-sm hover:bg-[color:var(--color-foreground)]/5"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={apply}
+              className="rounded-lg bg-[color:var(--color-accent)] px-5 py-2 text-sm font-semibold text-white"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
