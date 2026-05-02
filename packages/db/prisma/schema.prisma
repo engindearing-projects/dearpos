@@ -27,6 +27,9 @@ model Business {
   currency       String   @default("USD")
   stripeAccountId String?
 
+  logoUrl        String?
+  theme          Json?    // { preset?: string, colors?: { background, foreground, accent, muted } }
+
   locations      Location[]
   items          Item[]
   modifierGroups ModifierGroup[]
