@@ -23,6 +23,12 @@ export default async function NewItemPage({
     new Set(items.map((i) => i.category).filter((c): c is string => !!c)),
   ).sort();
 
+  const groups = await db.modifierGroup.findMany({
+    where: { businessId: business.id },
+    orderBy: { name: "asc" },
+    include: { _count: { select: { modifiers: true } } },
+  });
+
   return (
     <section>
       <Link
@@ -32,14 +38,18 @@ export default async function NewItemPage({
         ← Items
       </Link>
       <h2 className="mt-2 text-xl font-semibold">New item</h2>
-      <p className="mb-6 text-sm text-[color:var(--color-muted)]">
-        Variants and modifier groups are added on the next pass.
-      </p>
 
       <ItemForm
         slug={slug}
         mode={{ kind: "create" }}
         categories={categories}
+        modifierGroups={groups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          selectionType: g.selectionType,
+          required: g.required,
+          modifierCount: g._count.modifiers,
+        }))}
         initial={{
           name: "",
           description: "",
@@ -51,6 +61,8 @@ export default async function NewItemPage({
           kitchenStation: "",
           trackInventory: business.profile === "cafe-retail",
           sortOrder: 0,
+          variants: [],
+          modifierGroupIds: [],
         }}
       />
     </section>

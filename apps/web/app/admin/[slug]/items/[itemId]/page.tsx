@@ -18,6 +18,13 @@ export default async function EditItemPage({
 
   const item = await db.item.findFirst({
     where: { id: itemId, businessId: business.id },
+    include: {
+      variants: { orderBy: { sortOrder: "asc" } },
+      modifierGroups: {
+        orderBy: { sortOrder: "asc" },
+        select: { modifierGroupId: true },
+      },
+    },
   });
   if (!item) notFound();
 
@@ -28,6 +35,12 @@ export default async function EditItemPage({
   const categories = Array.from(
     new Set(others.map((i) => i.category).filter((c): c is string => !!c)),
   ).sort();
+
+  const groups = await db.modifierGroup.findMany({
+    where: { businessId: business.id },
+    orderBy: { name: "asc" },
+    include: { _count: { select: { modifiers: true } } },
+  });
 
   return (
     <section>
@@ -54,6 +67,13 @@ export default async function EditItemPage({
           slug={slug}
           mode={{ kind: "edit", itemId: item.id }}
           categories={categories}
+          modifierGroups={groups.map((g) => ({
+            id: g.id,
+            name: g.name,
+            selectionType: g.selectionType,
+            required: g.required,
+            modifierCount: g._count.modifiers,
+          }))}
           initial={{
             name: item.name,
             description: item.description ?? "",
@@ -65,6 +85,15 @@ export default async function EditItemPage({
             kitchenStation: item.kitchenStation ?? "",
             trackInventory: item.trackInventory,
             sortOrder: item.sortOrder,
+            variants: item.variants.map((v) => ({
+              id: v.id,
+              name: v.name,
+              priceDeltaCents: Math.round(Number(v.priceDelta) * 100),
+              isDefault: v.isDefault,
+              sortOrder: v.sortOrder,
+              sku: v.sku ?? "",
+            })),
+            modifierGroupIds: item.modifierGroups.map((mg) => mg.modifierGroupId),
           }}
         />
       </div>
