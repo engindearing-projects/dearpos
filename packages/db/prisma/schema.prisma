@@ -236,6 +236,8 @@ model Order {
 
   notes       String?
 
+  preparedAt  DateTime?  // bumped from the kitchen-tickets view
+
   lines       OrderLine[]
   payments    Payment[]
 

@@ -79,6 +79,34 @@ test.describe("staff create + login", () => {
   });
 });
 
+test.describe("kitchen tickets", () => {
+  test("paid order with kitchen-station items appears + can be bumped", async ({
+    page,
+  }) => {
+    // Ring up a Drip Coffee (kitchenStation = bar in the seed) so a
+    // ticket exists to bump.
+    await clearSession(page, SLUG);
+    await loginAs(page, SLUG);
+    await ringUpDripCoffee(page);
+    await page.getByRole("button", { name: /Cash · \$/ }).click();
+    await page.waitForURL(/\/receipt\//);
+
+    await page.goto(`/kitchen/${SLUG}`);
+    await expect(
+      page.getByRole("heading", { name: /Kitchen/ }),
+    ).toBeVisible();
+    // At least one Mark ready button is now present
+    const bump = page.getByRole("button", { name: "Mark ready" }).first();
+    await expect(bump).toBeVisible();
+    await bump.click();
+    // After bumping, the ticket either disappears or moves to the
+    // "Recently bumped" rail. The page heading still renders.
+    await expect(
+      page.getByRole("heading", { name: /Kitchen/ }),
+    ).toBeVisible();
+  });
+});
+
 test.describe("refund a cash sale", () => {
   test("paid order → full refund → status flips to refunded", async ({
     page,

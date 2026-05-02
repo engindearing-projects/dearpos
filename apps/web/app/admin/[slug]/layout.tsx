@@ -65,6 +65,7 @@ export default async function BusinessLayout({
           <TabLink href={`/admin/${slug}/z-report`} label="Z-report" />
           <TabLink href={`/admin/${slug}/branding`} label="Branding" />
           <TabLink href={`/pos/${slug}`} label="Open POS →" external />
+          <TabLink href={`/kitchen/${slug}`} label="Kitchen →" external />
         </nav>
 
         <div className="mt-8">{children}</div>
