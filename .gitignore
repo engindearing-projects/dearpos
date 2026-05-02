@@ -46,6 +46,9 @@ packages/db/prisma/migrations/dev/
 *.sqlite-journal
 *.db
 
+# Uploaded business assets (per-business logos and images)
+apps/web/public/uploads/
+
 # Bun
 bun.lockb.bak
 .env*.local
