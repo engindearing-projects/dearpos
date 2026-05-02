@@ -92,6 +92,7 @@ export default async function POSPage({
         tipSuggestions: profile.defaults.tipSuggestions,
         primaryAction: profile.ui.primaryAction,
         cardPaymentsAvailable: Boolean(getStripe()),
+        logoUrl: business.logoUrl,
       }}
       staff={staff}
       shift={{

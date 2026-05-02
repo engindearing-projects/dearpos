@@ -1,4 +1,5 @@
 import { db } from "@dearpos/db";
+import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import { LoginForm } from "./login-form";
 import { readSession } from "@/lib/session";
@@ -24,7 +25,17 @@ export default async function LoginPage({
   });
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-12">
+    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
+      {business.logoUrl && (
+        <Image
+          src={business.logoUrl}
+          alt={`${business.name} logo`}
+          width={72}
+          height={72}
+          unoptimized
+          className="mb-6 h-18 w-18 rounded-xl object-cover shadow-sm"
+        />
+      )}
       <LoginForm slug={slug} businessName={business.name} staff={staff} />
     </main>
   );

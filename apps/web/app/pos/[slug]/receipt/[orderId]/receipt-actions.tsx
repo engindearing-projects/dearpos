@@ -40,13 +40,22 @@ export function ReceiptActions(props: Props) {
 
   return (
     <>
-      <div className="mt-6 flex flex-wrap justify-center gap-3">
+      <div
+        data-print-hide
+        className="mt-6 flex flex-wrap justify-center gap-3"
+      >
         <Link
           href={`/pos/${props.slug}` as never}
           className="rounded-lg bg-[color:var(--color-foreground)] px-5 py-2.5 text-sm font-semibold text-[color:var(--color-background)] hover:opacity-90"
         >
           New order
         </Link>
+        <button
+          onClick={() => window.print()}
+          className="rounded-lg border border-[color:var(--color-foreground)]/15 px-5 py-2.5 text-sm font-medium hover:bg-[color:var(--color-foreground)]/5"
+        >
+          Print
+        </button>
         <Link
           href={`/admin/${props.slug}` as never}
           className="rounded-lg border border-[color:var(--color-foreground)]/15 px-5 py-2.5 text-sm font-medium hover:bg-[color:var(--color-foreground)]/5"

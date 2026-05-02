@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { db } from "@dearpos/db";
 import { fmtMoney } from "@/lib/format";
 import { getStripe } from "@/lib/stripe";
@@ -54,9 +55,28 @@ export default async function ReceiptPage({
 
   return (
     <main className="mx-auto max-w-md px-6 py-12">
-      <div className="rounded-2xl border border-[color:var(--color-foreground)]/10 bg-white/70 p-6 shadow-sm">
+      <div
+        data-print-root
+        className="rounded-2xl border border-[color:var(--color-foreground)]/10 bg-white/70 p-6 shadow-sm"
+      >
         <header className="border-b border-dashed border-[color:var(--color-foreground)]/15 pb-4 text-center">
-          <div className="font-[family-name:var(--font-display)] text-xl font-semibold">
+          {business.logoUrl && (
+            <div className="flex justify-center">
+              <Image
+                src={business.logoUrl}
+                alt={`${business.name} logo`}
+                width={56}
+                height={56}
+                unoptimized
+                className="h-14 w-14 rounded-md object-cover"
+              />
+            </div>
+          )}
+          <div
+            className={`font-[family-name:var(--font-display)] text-xl font-semibold ${
+              business.logoUrl ? "mt-2" : ""
+            }`}
+          >
             {business.name}
           </div>
           {order.location && (

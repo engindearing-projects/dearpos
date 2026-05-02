@@ -56,6 +56,7 @@ type Business = {
   tipSuggestions: number[];
   primaryAction: "ringUp" | "openTable";
   cardPaymentsAvailable: boolean;
+  logoUrl: string | null;
 };
 
 type Staff = {
@@ -202,10 +203,19 @@ export function POSScreen({
   return (
     <div className="flex h-screen flex-col bg-[color:var(--color-background)]">
       <header className="flex items-center justify-between border-b border-[color:var(--color-foreground)]/10 bg-white/60 px-5 py-3">
-        <div>
-          <div className="text-base font-semibold">{business.name}</div>
-          <div className="text-xs text-[color:var(--color-muted)]">
-            {business.location} · POS
+        <div className="flex items-center gap-3">
+          {business.logoUrl && (
+            <img
+              src={business.logoUrl}
+              alt=""
+              className="h-9 w-9 rounded-md object-cover"
+            />
+          )}
+          <div>
+            <div className="text-base font-semibold">{business.name}</div>
+            <div className="text-xs text-[color:var(--color-muted)]">
+              {business.location} · POS
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-4 text-xs">
