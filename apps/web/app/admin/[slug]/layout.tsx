@@ -57,6 +57,10 @@ export default async function BusinessLayout({
           <TabLink href={`/admin/${slug}`} label="Overview" />
           <TabLink href={`/admin/${slug}/orders`} label="Orders" />
           <TabLink href={`/admin/${slug}/items`} label="Items" />
+          <TabLink
+            href={`/admin/${slug}/modifier-groups`}
+            label="Modifier groups"
+          />
           <TabLink href={`/admin/${slug}/staff`} label="Staff" />
           <TabLink href={`/admin/${slug}/z-report`} label="Z-report" />
           <TabLink href={`/admin/${slug}/branding`} label="Branding" />
