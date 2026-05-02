@@ -1,0 +1,296 @@
+// DearPOS — Prisma schema
+//
+// Design notes:
+// - One catalog spine handles restaurant + café/retail. Item → Variant → ModifierGroup → Modifier.
+// - Money is always Decimal. Currency-as-Float is how POS systems lose pennies for years.
+// - Prices are captured at order-line time, so retroactive menu edits don't rewrite history.
+// - InventoryComponent exists in v0.1 but isn't wired to deductions yet — that's v0.2.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== Tenant =====
+
+model Business {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  name           String
+  profile        String   // "restaurant" | "cafe-retail"
+  timezone       String   @default("America/Los_Angeles")
+  taxRate        Decimal  @default(0.089)
+  currency       String   @default("USD")
+  stripeAccountId String?
+
+  locations      Location[]
+  items          Item[]
+  modifierGroups ModifierGroup[]
+  staff          Staff[]
+  orders         Order[]
+  shifts         Shift[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Location {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  address    String?
+  active     Boolean  @default(true)
+
+  orders     Order[]
+  terminals  Terminal[]
+
+  createdAt  DateTime @default(now())
+}
+
+model Terminal {
+  id                String   @id @default(cuid())
+  locationId        String
+  location          Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  name              String
+  stripeTerminalId  String?
+  lastSeenAt        DateTime?
+
+  createdAt         DateTime @default(now())
+}
+
+// ===== Catalog =====
+
+model Item {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  sku            String?
+  name           String
+  description    String?
+  category       String?
+
+  basePrice      Decimal
+  taxable        Boolean  @default(true)
+
+  // Restaurant-side metadata
+  kitchenStation String?  // "bar", "grill", "expo", null
+
+  // Retail-side metadata
+  trackInventory Boolean  @default(false)
+  barcode        String?
+
+  active         Boolean  @default(true)
+  imageUrl       String?
+  sortOrder      Int      @default(0)
+
+  variants            Variant[]
+  modifierGroups      ItemModifierGroup[]
+  inventoryComponents InventoryComponent[]
+  orderLines          OrderLine[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([businessId, sku])
+  @@index([businessId, category])
+  @@index([businessId, barcode])
+}
+
+model Variant {
+  id         String   @id @default(cuid())
+  itemId     String
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  name       String
+  priceDelta Decimal  @default(0)
+  sku        String?
+  isDefault  Boolean  @default(false)
+  sortOrder  Int      @default(0)
+
+  orderLines OrderLine[]
+
+  createdAt  DateTime @default(now())
+}
+
+model ModifierGroup {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name          String
+  selectionType String   // "single" | "multiple"
+  required      Boolean  @default(false)
+  minSelections Int      @default(0)
+  maxSelections Int?
+
+  modifiers     Modifier[]
+  itemLinks     ItemModifierGroup[]
+
+  createdAt     DateTime @default(now())
+}
+
+model Modifier {
+  id              String   @id @default(cuid())
+  modifierGroupId String
+  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  name       String
+  priceDelta Decimal  @default(0)
+  isDefault  Boolean  @default(false)
+  sortOrder  Int      @default(0)
+
+  orderLineModifiers OrderLineModifier[]
+}
+
+model ItemModifierGroup {
+  itemId          String
+  modifierGroupId String
+  sortOrder       Int    @default(0)
+
+  item          Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  modifierGroup ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, modifierGroupId])
+}
+
+model InventoryComponent {
+  id       String  @id @default(cuid())
+  itemId   String
+  item     Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  name     String
+  quantity Decimal
+  unit     String
+
+  createdAt DateTime @default(now())
+}
+
+// ===== Staff =====
+
+model Staff {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name       String
+  pinHash    String
+  role       String   // "owner" | "manager" | "cashier" | "server"
+  active     Boolean  @default(true)
+
+  shifts     Shift[]
+  orders     Order[]  @relation("OrderStaff")
+
+  createdAt  DateTime @default(now())
+
+  @@unique([businessId, name])
+}
+
+model Shift {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  staffId      String
+  staff        Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  clockIn      DateTime
+  clockOut     DateTime?
+  startingCash Decimal?
+  endingCash   Decimal?
+
+  createdAt    DateTime  @default(now())
+
+  @@index([businessId, clockIn])
+}
+
+// ===== Orders =====
+
+model Order {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  locationId  String?
+  location    Location? @relation(fields: [locationId], references: [id])
+  staffId     String?
+  staff       Staff?    @relation("OrderStaff", fields: [staffId], references: [id])
+
+  number      Int       // human-friendly daily order number
+  tableNumber String?
+  guestCount  Int?
+
+  status      String    // "open" | "sent" | "paid" | "voided" | "refunded"
+
+  subtotal    Decimal   @default(0)
+  tax         Decimal   @default(0)
+  tip         Decimal   @default(0)
+  discount    Decimal   @default(0)
+  total       Decimal   @default(0)
+
+  notes       String?
+
+  lines       OrderLine[]
+  payments    Payment[]
+
+  createdAt   DateTime  @default(now())
+  closedAt    DateTime?
+
+  @@index([businessId, status])
+  @@index([businessId, createdAt])
+}
+
+model OrderLine {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  itemId    String
+  item      Item     @relation(fields: [itemId], references: [id])
+  variantId String?
+  variant   Variant? @relation(fields: [variantId], references: [id])
+
+  quantity  Int      @default(1)
+  unitPrice Decimal
+  lineTotal Decimal
+  notes     String?
+  voided    Boolean  @default(false)
+  voidReason String?
+
+  modifiers OrderLineModifier[]
+
+  createdAt DateTime @default(now())
+}
+
+model OrderLineModifier {
+  id          String    @id @default(cuid())
+  orderLineId String
+  orderLine   OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+
+  modifierId  String
+  modifier    Modifier  @relation(fields: [modifierId], references: [id])
+  priceDelta  Decimal
+}
+
+model Payment {
+  id     String  @id @default(cuid())
+  orderId String
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  method String   // "cash" | "card" | "gift" | "comp"
+  amount Decimal
+
+  stripePaymentIntentId String?
+  stripeChargeId        String?
+
+  status         String  @default("succeeded") // "pending" | "succeeded" | "refunded" | "failed"
+  refundedAmount Decimal @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([stripePaymentIntentId])
+}

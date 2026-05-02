@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: dearpos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dearpos
+      POSTGRES_PASSWORD: dearpos
+      POSTGRES_DB: dearpos
+    ports:
+      - "5432:5432"
+    volumes:
+      - dearpos-pg:/var/lib/postgresql/data
+
+volumes:
+  dearpos-pg:

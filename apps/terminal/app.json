@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "DearPOS",
+    "slug": "dearpos",
+    "scheme": "dearpos",
+    "version": "0.1.0",
+    "orientation": "landscape",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#faf7f2"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "soy.engindearing.dearpos"
+    },
+    "android": {
+      "package": "soy.engindearing.dearpos",
+      "adaptiveIcon": {
+        "backgroundColor": "#faf7f2"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
