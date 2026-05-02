@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@dearpos/db";
 
 export function fmtMoney(value: Prisma.Decimal | number | string): string {
   const n = typeof value === "object" ? Number(value.toString()) : Number(value);

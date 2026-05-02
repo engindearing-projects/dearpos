@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { createOrder } from "./actions";
 
 type Modifier = {
   id: string;
@@ -46,6 +47,7 @@ type CartLine = {
 };
 
 type Business = {
+  slug: string;
   name: string;
   location: string;
   taxRate: number;
@@ -88,6 +90,8 @@ export function POSScreen({
   const [cart, setCart] = useState<CartLine[]>([]);
   const [configuringItem, setConfiguringItem] = useState<Item | null>(null);
   const [tipPercent, setTipPercent] = useState<number | null>(null);
+  const [isCharging, startCharging] = useTransition();
+  const [chargeError, setChargeError] = useState<string | null>(null);
 
   const visibleItems = items.filter((i) => i.category === activeCategory);
 
@@ -141,6 +145,36 @@ export function POSScreen({
   function clearCart() {
     setCart([]);
     setTipPercent(null);
+    setChargeError(null);
+  }
+
+  function handleCharge() {
+    setChargeError(null);
+    startCharging(async () => {
+      try {
+        await createOrder({
+          businessSlug: business.slug,
+          paymentMethod: "cash",
+          tipCents,
+          lines: cart.map((line) => ({
+            itemId: line.item.id,
+            variantId: line.variant?.id ?? null,
+            modifierIds: line.selectedModifiers.map((m) => m.id),
+            quantity: line.quantity,
+          })),
+        });
+        // server action redirects on success — anything past here is the failure path
+      } catch (err) {
+        // NEXT_REDIRECT throws look like errors but are how the redirect propagates.
+        // Let the framework handle them.
+        if (err instanceof Error && err.message.startsWith("NEXT_REDIRECT")) {
+          throw err;
+        }
+        setChargeError(
+          err instanceof Error ? err.message : "Could not complete sale",
+        );
+      }
+    });
   }
 
   return (
@@ -335,9 +369,18 @@ export function POSScreen({
                 </div>
               </dl>
 
-              <button className="mt-4 w-full rounded-lg bg-[color:var(--color-accent)] py-3 text-base font-semibold text-white shadow-sm hover:opacity-90">
-                Charge {fmt(totalCents)}
+              <button
+                onClick={handleCharge}
+                disabled={isCharging}
+                className="mt-4 w-full rounded-lg bg-[color:var(--color-accent)] py-3 text-base font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-60"
+              >
+                {isCharging ? "Charging…" : `Charge ${fmt(totalCents)} · Cash`}
               </button>
+              {chargeError && (
+                <p className="mt-2 text-center text-xs text-red-600">
+                  {chargeError}
+                </p>
+              )}
               <p className="mt-2 text-center text-[10px] text-[color:var(--color-muted)]">
                 Stripe Terminal checkout wired in next
               </p>

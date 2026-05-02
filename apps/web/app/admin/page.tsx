@@ -39,7 +39,7 @@ export default async function AdminIndex() {
             return (
               <li key={b.id}>
                 <Link
-                  href={`/admin/${b.slug}`}
+                  href={`/admin/${b.slug}` as never}
                   className="flex items-baseline justify-between gap-4 px-5 py-4 hover:bg-[color:var(--color-foreground)]/5"
                 >
                   <div>

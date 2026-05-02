@@ -66,6 +66,7 @@ export default async function POSPage({
   return (
     <POSScreen
       business={{
+        slug: business.slug,
         name: business.name,
         location: business.locations[0]?.name ?? "",
         taxRate: Number(business.taxRate),

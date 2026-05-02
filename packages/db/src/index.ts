@@ -12,4 +12,9 @@ if (process.env.NODE_ENV !== "production") {
   globalThis.__dearposPrisma = db;
 }
 
-export * from "@prisma/client";
+// Re-export named values from the Prisma runtime. Turbopack can't statically
+// expand `export *` against a CJS module, so list them explicitly.
+export { Prisma, PrismaClient } from "@prisma/client";
+
+// Re-export Prisma's generated model and input types for downstream consumers.
+export type * from "@prisma/client";
