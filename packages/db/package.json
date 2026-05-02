@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "postinstall": "prisma generate",
     "generate": "prisma generate",
     "push": "prisma db push",
     "migrate": "prisma migrate dev",
@@ -16,8 +17,8 @@
     "seed": "bun run src/seed.ts"
   },
   "dependencies": {
-    "@prisma/client": "^7.0.1",
-    "prisma": "^7.0.1"
+    "@prisma/client": "^6.19.3",
+    "prisma": "^6.19.3"
   },
   "devDependencies": {
     "@types/bun": "latest"
