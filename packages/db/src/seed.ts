@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from "@prisma/client";
+import { hashPin } from "./pin";
 
 const db = new PrismaClient();
 
@@ -391,9 +392,22 @@ async function main() {
     },
   });
 
+  console.log("→ Seeding staff (PIN 1234 for everyone in dev)");
+  await db.staff.createMany({
+    data: [
+      { businessId: jotn.id, name: "J", role: "owner", pinHash: hashPin("1234") },
+      { businessId: jotn.id, name: "Sarah", role: "server", pinHash: hashPin("1234") },
+      { businessId: jotn.id, name: "Marco", role: "manager", pinHash: hashPin("1234") },
+      { businessId: cafe.id, name: "J", role: "owner", pinHash: hashPin("1234") },
+      { businessId: cafe.id, name: "Maya", role: "cashier", pinHash: hashPin("1234") },
+      { businessId: cafe.id, name: "Devon", role: "manager", pinHash: hashPin("1234") },
+    ],
+  });
+
   console.log("✓ Seed complete");
   console.log(`  Restaurant: ${jotn.name} (${jotn.slug})`);
   console.log(`  Cafe:       ${cafe.name} (${cafe.slug})`);
+  console.log(`  All staff:  PIN 1234 (dev only)`);
 }
 
 main()

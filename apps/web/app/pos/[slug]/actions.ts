@@ -5,6 +5,7 @@ import { computeTotals } from "@dearpos/core";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { startOfBusinessDay } from "@/lib/business-day";
+import { readSession } from "@/lib/session";
 
 export type CartLineInput = {
   itemId: string;
@@ -33,6 +34,11 @@ export async function createOrder(input: CreateOrderInput) {
     include: { locations: { take: 1 } },
   });
   if (!business) throw new Error("Business not found");
+
+  const session = await readSession(input.businessSlug);
+  if (!session || session.businessId !== business.id) {
+    throw new Error("Not signed in");
+  }
 
   // Re-fetch every item the cart references so prices come from the DB,
   // not the client. The client value is hint-only.
@@ -142,6 +148,7 @@ export async function createOrder(input: CreateOrderInput) {
       data: {
         businessId: business.id,
         locationId: business.locations[0]?.id ?? null,
+        staffId: session.staffId,
         number: todaysCount + 1,
         status: "paid",
         subtotal: dec(totals.subtotalCents),

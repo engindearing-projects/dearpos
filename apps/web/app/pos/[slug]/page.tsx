@@ -1,7 +1,8 @@
 import { db } from "@dearpos/db";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getProfile } from "@dearpos/core/profiles";
 import { POSScreen } from "./pos-screen";
+import { readSession } from "@/lib/session";
 
 export default async function POSPage({
   params,
@@ -14,6 +15,17 @@ export default async function POSPage({
     include: { locations: true },
   });
   if (!business) notFound();
+
+  const session = await readSession(slug);
+  if (!session || session.businessId !== business.id) {
+    redirect(`/pos/${slug}/login` as never);
+  }
+
+  const staff = await db.staff.findFirst({
+    where: { id: session.staffId, businessId: business.id, active: true },
+    select: { id: true, name: true, role: true },
+  });
+  if (!staff) redirect(`/pos/${slug}/login` as never);
 
   const items = await db.item.findMany({
     where: { businessId: business.id, active: true },
@@ -73,6 +85,7 @@ export default async function POSPage({
         tipSuggestions: profile.defaults.tipSuggestions,
         primaryAction: profile.ui.primaryAction,
       }}
+      staff={staff}
       items={serializedItems}
     />
   );

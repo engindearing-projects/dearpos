@@ -18,3 +18,5 @@ export { Prisma, PrismaClient } from "@prisma/client";
 
 // Re-export Prisma's generated model and input types for downstream consumers.
 export type * from "@prisma/client";
+
+export { hashPin, verifyPin } from "./pin";

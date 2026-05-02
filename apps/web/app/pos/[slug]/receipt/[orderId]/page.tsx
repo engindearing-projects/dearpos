@@ -53,6 +53,11 @@ export default async function ReceiptPage({
           <div className="mt-3 text-xs uppercase tracking-wider text-[color:var(--color-muted)]">
             Order #{order.number} · {dt}
           </div>
+          {order.staff && (
+            <div className="mt-1 text-xs text-[color:var(--color-muted)]">
+              Served by {order.staff.name}
+            </div>
+          )}
         </header>
 
         <ul className="my-4 space-y-3 text-sm">

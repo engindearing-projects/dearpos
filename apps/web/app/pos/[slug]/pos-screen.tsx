@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { createOrder } from "./actions";
+import { signOut } from "./login/actions";
 
 type Modifier = {
   id: string;
@@ -55,6 +56,12 @@ type Business = {
   primaryAction: "ringUp" | "openTable";
 };
 
+type Staff = {
+  id: string;
+  name: string;
+  role: string;
+};
+
 const fmt = (cents: number) =>
   `${cents < 0 ? "−" : ""}$${(Math.abs(cents) / 100).toFixed(2)}`;
 
@@ -69,9 +76,11 @@ function lineUnitCents(line: CartLine): number {
 
 export function POSScreen({
   business,
+  staff,
   items,
 }: {
   business: Business;
+  staff: Staff;
   items: Item[];
 }) {
   const categories = useMemo(() => {
@@ -186,8 +195,55 @@ export function POSScreen({
             {business.location} · POS
           </div>
         </div>
-        <div className="text-xs text-[color:var(--color-muted)]">
-          tax {(business.taxRate * 100).toFixed(2)}%
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-[color:var(--color-muted)]">
+            tax {(business.taxRate * 100).toFixed(2)}%
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{staff.name}</span>
+            <span className="text-[color:var(--color-muted)]">
+              · {staff.role}
+            </span>
+          </div>
+          <button
+            onClick={() =>
+              signOut({ slug: business.slug, closeShift: false }).catch(
+                (err) => {
+                  if (
+                    err instanceof Error &&
+                    err.message.startsWith("NEXT_REDIRECT")
+                  )
+                    throw err;
+                },
+              )
+            }
+            className="rounded-md border border-[color:var(--color-foreground)]/15 px-2.5 py-1 text-[11px] font-medium hover:bg-[color:var(--color-foreground)]/5"
+            title="Switch staff without closing shift"
+          >
+            Switch
+          </button>
+          <button
+            onClick={() => {
+              if (
+                confirm(
+                  "Clock out and close your shift? You'll need to PIN back in.",
+                )
+              ) {
+                signOut({ slug: business.slug, closeShift: true }).catch(
+                  (err) => {
+                    if (
+                      err instanceof Error &&
+                      err.message.startsWith("NEXT_REDIRECT")
+                    )
+                      throw err;
+                  },
+                );
+              }
+            }}
+            className="rounded-md bg-[color:var(--color-foreground)] px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-background)] hover:opacity-90"
+          >
+            Clock out
+          </button>
         </div>
       </header>
 
