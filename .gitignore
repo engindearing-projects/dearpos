@@ -49,6 +49,11 @@ packages/db/prisma/migrations/dev/
 # Uploaded business assets (per-business logos and images)
 apps/web/public/uploads/
 
+# Playwright artifacts
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/playwright/.cache/
+
 # Bun
 bun.lockb.bak
 .env*.local
