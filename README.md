@@ -82,7 +82,7 @@ We were building a custom POS for [Jewel of the North](https://jewelofthenorthre
 
 So we open-sourced it.
 
-If you run a small shop, café, or restaurant — anywhere, but especially in Spokane — and you want to stop renting your POS, [open an issue](https://github.com/engindearing-projects/dearpos/issues) or email [hi@engindearing.soy](mailto:hi@engindearing.soy). We're picking the first ten shops to onboard personally.
+If you run a small shop, café, or restaurant — anywhere, but especially in Spokane — and you want to stop renting your POS, [open an issue](https://github.com/engindearing-projects/dearpos/issues) or email [j@engindearing.soy](mailto:j@engindearing.soy). We're picking the first ten shops to onboard personally.
 
 ## Contributing
 
