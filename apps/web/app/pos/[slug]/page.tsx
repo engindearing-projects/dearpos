@@ -28,6 +28,12 @@ export default async function POSPage({
   });
   if (!staff) redirect(`/pos/${slug}/login` as never);
 
+  const shift = await db.shift.findUnique({
+    where: { id: session.shiftId },
+    select: { id: true, startingCash: true },
+  });
+  if (!shift) redirect(`/pos/${slug}/login` as never);
+
   const items = await db.item.findMany({
     where: { businessId: business.id, active: true },
     orderBy: [{ category: "asc" }, { sortOrder: "asc" }],
@@ -88,6 +94,13 @@ export default async function POSPage({
         cardPaymentsAvailable: Boolean(getStripe()),
       }}
       staff={staff}
+      shift={{
+        id: shift.id,
+        startingCashCents:
+          shift.startingCash != null
+            ? Math.round(Number(shift.startingCash) * 100)
+            : null,
+      }}
       items={serializedItems}
     />
   );

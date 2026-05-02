@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createOrder } from "./actions";
-import { signOut } from "./login/actions";
+import { setShiftStartingCash, switchStaff } from "./login/actions";
 
 type Modifier = {
   id: string;
@@ -63,6 +64,11 @@ type Staff = {
   role: string;
 };
 
+type Shift = {
+  id: string;
+  startingCashCents: number | null;
+};
+
 const fmt = (cents: number) =>
   `${cents < 0 ? "−" : ""}$${(Math.abs(cents) / 100).toFixed(2)}`;
 
@@ -78,12 +84,18 @@ function lineUnitCents(line: CartLine): number {
 export function POSScreen({
   business,
   staff,
+  shift,
   items,
 }: {
   business: Business;
   staff: Staff;
+  shift: Shift;
   items: Item[];
 }) {
+  const router = useRouter();
+  const [startingCashOpen, setStartingCashOpen] = useState(
+    shift.startingCashCents == null,
+  );
   const categories = useMemo(() => {
     const seen = new Set<string>();
     const ordered: string[] = [];
@@ -207,16 +219,28 @@ export function POSScreen({
             </span>
           </div>
           <button
+            onClick={() => setStartingCashOpen(true)}
+            className={`rounded-md px-2.5 py-1 text-[11px] font-medium ${
+              shift.startingCashCents == null
+                ? "border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                : "border border-[color:var(--color-foreground)]/15 hover:bg-[color:var(--color-foreground)]/5"
+            }`}
+            title="Set or update the starting cash for this shift"
+          >
+            Drawer:{" "}
+            {shift.startingCashCents == null
+              ? "set"
+              : fmt(shift.startingCashCents)}
+          </button>
+          <button
             onClick={() =>
-              signOut({ slug: business.slug, closeShift: false }).catch(
-                (err) => {
-                  if (
-                    err instanceof Error &&
-                    err.message.startsWith("NEXT_REDIRECT")
-                  )
-                    throw err;
-                },
-              )
+              switchStaff({ slug: business.slug }).catch((err) => {
+                if (
+                  err instanceof Error &&
+                  err.message.startsWith("NEXT_REDIRECT")
+                )
+                  throw err;
+              })
             }
             className="rounded-md border border-[color:var(--color-foreground)]/15 px-2.5 py-1 text-[11px] font-medium hover:bg-[color:var(--color-foreground)]/5"
             title="Switch staff without closing shift"
@@ -224,23 +248,9 @@ export function POSScreen({
             Switch
           </button>
           <button
-            onClick={() => {
-              if (
-                confirm(
-                  "Clock out and close your shift? You'll need to PIN back in.",
-                )
-              ) {
-                signOut({ slug: business.slug, closeShift: true }).catch(
-                  (err) => {
-                    if (
-                      err instanceof Error &&
-                      err.message.startsWith("NEXT_REDIRECT")
-                    )
-                      throw err;
-                  },
-                );
-              }
-            }}
+            onClick={() =>
+              router.push(`/pos/${business.slug}/clock-out` as never)
+            }
             className="rounded-md bg-[color:var(--color-foreground)] px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-background)] hover:opacity-90"
           >
             Clock out
@@ -471,8 +481,130 @@ export function POSScreen({
           }
         />
       )}
+
+      {startingCashOpen && (
+        <StartingCashModal
+          slug={business.slug}
+          currentCents={shift.startingCashCents}
+          onClose={() => setStartingCashOpen(false)}
+        />
+      )}
     </div>
   );
+}
+
+function StartingCashModal({
+  slug,
+  currentCents,
+  onClose,
+}: {
+  slug: string;
+  currentCents: number | null;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [raw, setRaw] = useState(
+    currentCents != null ? (currentCents / 100).toFixed(2) : "",
+  );
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function presetButton(cents: number) {
+    return (
+      <button
+        key={cents}
+        onClick={() => setRaw((cents / 100).toFixed(2))}
+        className="rounded-md border border-[color:var(--color-foreground)]/15 px-3 py-2 text-sm hover:bg-[color:var(--color-foreground)]/5"
+      >
+        {fmt(cents)}
+      </button>
+    );
+  }
+
+  function save() {
+    const parsed = parseDollars(raw);
+    if (parsed == null) {
+      setError("Enter an amount like 100 or 50.00");
+      return;
+    }
+    setError(null);
+    start(async () => {
+      try {
+        await setShiftStartingCash({ slug, cents: parsed });
+        router.refresh();
+        onClose();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not save");
+      }
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 px-6">
+      <div className="w-full max-w-sm rounded-2xl bg-[color:var(--color-background)] p-6 shadow-2xl">
+        <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold">
+          Starting cash
+        </h2>
+        <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+          What's in the drawer right now? You can update this later.
+        </p>
+
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          {[0, 5000, 10000, 20000].map(presetButton)}
+        </div>
+
+        <label className="mt-4 block">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--color-muted)]">
+            Amount
+          </span>
+          <div className="mt-1 flex items-baseline rounded-lg border border-[color:var(--color-foreground)]/15 bg-white/70 px-3">
+            <span className="mr-1 text-xl font-medium text-[color:var(--color-muted)]">
+              $
+            </span>
+            <input
+              type="text"
+              inputMode="decimal"
+              autoFocus
+              value={raw}
+              onChange={(e) => {
+                setError(null);
+                setRaw(e.target.value);
+              }}
+              placeholder="0.00"
+              className="w-full bg-transparent py-2.5 text-2xl font-semibold tabular-nums focus:outline-none"
+            />
+          </div>
+        </label>
+
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-lg px-4 py-2 text-sm hover:bg-[color:var(--color-foreground)]/5"
+          >
+            Skip
+          </button>
+          <button
+            onClick={save}
+            disabled={pending}
+            className="rounded-lg bg-[color:var(--color-foreground)] px-5 py-2 text-sm font-semibold text-[color:var(--color-background)] disabled:opacity-50"
+          >
+            {pending ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function parseDollars(raw: string): number | null {
+  const trimmed = raw.trim().replace(/^\$/, "");
+  if (trimmed === "") return 0;
+  if (!/^\d*(\.\d{0,2})?$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * 100);
 }
 
 function ItemConfigurator({

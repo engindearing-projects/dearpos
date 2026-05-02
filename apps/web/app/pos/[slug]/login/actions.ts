@@ -1,6 +1,6 @@
 "use server";
 
-import { db, verifyPin } from "@dearpos/db";
+import { db, Prisma, verifyPin } from "@dearpos/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
@@ -75,15 +75,48 @@ export async function signIn(input: {
   redirect(`/pos/${input.slug}` as never);
 }
 
-export async function signOut(input: { slug: string; closeShift: boolean }) {
-  const session = await readSession(input.slug);
-  if (session && input.closeShift) {
-    // Close the shift only if it's still open. Idempotent across re-clicks.
-    await db.shift.updateMany({
-      where: { id: session.shiftId, clockOut: null },
-      data: { clockOut: new Date() },
-    });
+// Switch staff: drop the cookie but leave the shift open so the next login
+// reuses it.
+export async function switchStaff(input: { slug: string }) {
+  const jar = await cookies();
+  jar.delete(cookieName(input.slug));
+  redirect(`/pos/${input.slug}/login` as never);
+}
+
+export async function setShiftStartingCash(input: {
+  slug: string;
+  cents: number;
+}) {
+  if (!Number.isFinite(input.cents) || input.cents < 0) {
+    throw new Error("Starting cash must be a non-negative amount");
   }
+  const session = await readSession(input.slug);
+  if (!session) throw new Error("Not signed in");
+
+  await db.shift.update({
+    where: { id: session.shiftId },
+    data: { startingCash: new Prisma.Decimal(input.cents).div(100) },
+  });
+}
+
+export async function closeShiftAndSignOut(input: {
+  slug: string;
+  endingCashCents: number;
+}) {
+  if (!Number.isFinite(input.endingCashCents) || input.endingCashCents < 0) {
+    throw new Error("Ending cash must be a non-negative amount");
+  }
+  const session = await readSession(input.slug);
+  if (!session) throw new Error("Not signed in");
+
+  await db.shift.updateMany({
+    where: { id: session.shiftId, clockOut: null },
+    data: {
+      clockOut: new Date(),
+      endingCash: new Prisma.Decimal(input.endingCashCents).div(100),
+    },
+  });
+
   const jar = await cookies();
   jar.delete(cookieName(input.slug));
   redirect(`/pos/${input.slug}/login` as never);

@@ -6,6 +6,7 @@ import {
   businessDayYMD,
   startOfBusinessDayFromYMD,
 } from "@/lib/business-day";
+import { summarizeShiftCash } from "@/lib/cash-drawer";
 
 const cents = (d: { toString(): string } | number | null | undefined) =>
   d == null ? 0 : Math.round(Number(d.toString()) * 100);
@@ -30,6 +31,21 @@ export default async function ZReportPage({
 
   const dayStart = startOfBusinessDayFromYMD(ymd, business.timezone);
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+  const shifts = await db.shift.findMany({
+    where: {
+      businessId: business.id,
+      clockIn: { gte: dayStart, lt: dayEnd },
+    },
+    include: { staff: true },
+    orderBy: { clockIn: "asc" },
+  });
+  const shiftSummaries = await Promise.all(
+    shifts.map(async (s) => ({
+      shift: s,
+      summary: await summarizeShiftCash(s.id),
+    })),
+  );
 
   const orders = await db.order.findMany({
     where: {
@@ -289,6 +305,87 @@ export default async function ZReportPage({
               ))}
           </Card>
 
+          {shiftSummaries.length > 0 && (
+            <Card title="Cash drawer">
+              {shiftSummaries.map(({ shift: s, summary }) => {
+                const v = summary.varianceCents;
+                return (
+                  <div
+                    key={s.id}
+                    className="border-b border-[color:var(--color-foreground)]/10 py-3 text-sm last:border-0"
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="font-medium">
+                        {s.staff.name}
+                        <span className="ml-2 text-xs text-[color:var(--color-muted)]">
+                          {new Intl.DateTimeFormat("en-US", {
+                            timeZone: business.timezone,
+                            timeStyle: "short",
+                          }).format(s.clockIn)}
+                          {" → "}
+                          {s.clockOut
+                            ? new Intl.DateTimeFormat("en-US", {
+                                timeZone: business.timezone,
+                                timeStyle: "short",
+                              }).format(s.clockOut)
+                            : "open"}
+                        </span>
+                      </div>
+                      {v !== null && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${
+                            v === 0
+                              ? "bg-emerald-50 text-emerald-900"
+                              : v > 0
+                                ? "bg-amber-50 text-amber-900"
+                                : "bg-rose-50 text-rose-900"
+                          }`}
+                        >
+                          {v === 0
+                            ? "matches"
+                            : `${v > 0 ? "+" : "−"}${fmtMoney(Math.abs(v) / 100)}`}
+                        </span>
+                      )}
+                    </div>
+                    <dl className="mt-2 grid grid-cols-4 gap-2 text-xs">
+                      <Cell
+                        label="Start"
+                        value={
+                          summary.startingCashCents != null
+                            ? fmtMoney(summary.startingCashCents / 100)
+                            : "—"
+                        }
+                      />
+                      <Cell
+                        label="Cash sales"
+                        value={fmtMoney(summary.cashSalesCents / 100)}
+                      />
+                      <Cell
+                        label="Expected"
+                        value={
+                          summary.expectedEndingCashCents != null
+                            ? fmtMoney(summary.expectedEndingCashCents / 100)
+                            : "—"
+                        }
+                      />
+                      <Cell
+                        label="Counted"
+                        value={
+                          summary.endingCashCents != null
+                            ? fmtMoney(summary.endingCashCents / 100)
+                            : s.clockOut
+                              ? "not counted"
+                              : "still open"
+                        }
+                        muted={summary.endingCashCents == null}
+                      />
+                    </dl>
+                  </div>
+                );
+              })}
+            </Card>
+          )}
+
           {voided.length > 0 && (
             <Card title="Voids">
               {voided.map((o) => (
@@ -348,6 +445,31 @@ function Row({
         {label}
       </dt>
       <dd className="tabular-nums">{value}</dd>
+    </div>
+  );
+}
+
+function Cell({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-[color:var(--color-muted)]">
+        {label}
+      </div>
+      <div
+        className={`mt-0.5 tabular-nums ${
+          muted ? "text-[color:var(--color-muted)]" : ""
+        }`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
