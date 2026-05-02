@@ -41,6 +41,7 @@ export default async function BusinessLayout({
       <nav className="mt-6 flex gap-1 border-b border-[color:var(--color-foreground)]/10">
         <TabLink href={`/admin/${slug}`} label="Overview" />
         <TabLink href={`/admin/${slug}/items`} label="Items" />
+        <TabLink href={`/admin/${slug}/z-report`} label="Z-report" />
         <TabLink href={`/pos/${slug}`} label="Open POS →" external />
       </nav>
 
