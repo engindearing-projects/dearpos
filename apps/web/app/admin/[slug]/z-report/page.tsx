@@ -60,8 +60,11 @@ export default async function ZReportPage({
     orderBy: { number: "asc" },
   });
 
-  const live = orders.filter((o) => o.status !== "voided");
+  const live = orders.filter(
+    (o) => o.status === "paid" || o.status === "refunded",
+  );
   const voided = orders.filter((o) => o.status === "voided");
+  const openCount = orders.filter((o) => o.status === "open").length;
 
   const grossCents = live.reduce((s, o) => s + cents(o.subtotal), 0);
   const discountCents = live.reduce((s, o) => s + cents(o.discount), 0);
@@ -233,6 +236,13 @@ export default async function ZReportPage({
           <Card title="Tickets">
             <Row label="Tickets closed" value={String(live.length)} />
             <Row label="Voided" value={String(voided.length)} />
+            {openCount > 0 && (
+              <Row
+                label="Open (uncaptured)"
+                value={String(openCount)}
+                muted
+              />
+            )}
             <Row
               label="Avg ticket"
               value={

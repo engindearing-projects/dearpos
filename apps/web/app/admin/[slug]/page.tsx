@@ -22,20 +22,30 @@ export default async function BusinessOverview({
   const todaysOrders = await db.order.findMany({
     where: {
       businessId: business.id,
-      status: { not: "voided" },
+      status: { in: ["paid", "refunded"] },
       createdAt: { gte: dayStart },
     },
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { lines: true } },
-      payments: { select: { method: true } },
+      payments: true,
     },
   });
 
-  const grossCents = todaysOrders.reduce(
-    (s, o) => s + Math.round(Number(o.total) * 100),
+  const refundedCents = todaysOrders.reduce(
+    (s, o) =>
+      s +
+      o.payments.reduce(
+        (ss, p) => ss + Math.round(Number(p.refundedAmount) * 100),
+        0,
+      ),
     0,
   );
+  const grossCents =
+    todaysOrders.reduce(
+      (s, o) => s + Math.round(Number(o.total) * 100),
+      0,
+    ) - refundedCents;
   const tipsCents = todaysOrders.reduce(
     (s, o) => s + Math.round(Number(o.tip) * 100),
     0,
