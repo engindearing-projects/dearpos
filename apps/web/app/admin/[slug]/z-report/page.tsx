@@ -75,16 +75,17 @@ export default async function ZReportPage({
     0,
   );
 
-  // Buckets
+  // Buckets — payment amounts net of refunds.
   const byPayment = new Map<
     string,
     { count: number; amountCents: number }
   >();
   for (const o of live) {
     for (const p of o.payments) {
+      if (p.status === "failed") continue;
       const b = byPayment.get(p.method) ?? { count: 0, amountCents: 0 };
       b.count += 1;
-      b.amountCents += cents(p.amount);
+      b.amountCents += cents(p.amount) - cents(p.refundedAmount);
       byPayment.set(p.method, b);
     }
   }
@@ -215,17 +216,18 @@ export default async function ZReportPage({
             />
             <Row label="Tax collected" value={fmtMoney(taxCents / 100)} />
             <Row label="Tips" value={fmtMoney(tipCents / 100)} />
-            <Row
-              label="Total received"
-              value={fmtMoney(totalCents / 100)}
-              bold
-            />
+            <Row label="Charged" value={fmtMoney(totalCents / 100)} />
             {refundedCents > 0 && (
               <Row
                 label="Refunds"
                 value={`−${fmtMoney(refundedCents / 100)}`}
               />
             )}
+            <Row
+              label="Net received"
+              value={fmtMoney((totalCents - refundedCents) / 100)}
+              bold
+            />
           </Card>
 
           <Card title="Tickets">

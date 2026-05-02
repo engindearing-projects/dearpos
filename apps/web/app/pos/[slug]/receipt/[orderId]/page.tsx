@@ -1,7 +1,11 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@dearpos/db";
 import { fmtMoney } from "@/lib/format";
+import { getStripe } from "@/lib/stripe";
+import { ReceiptActions } from "./receipt-actions";
+
+const cents = (d: { toString(): string } | number | null | undefined) =>
+  d == null ? 0 : Math.round(Number(d.toString()) * 100);
 
 export default async function ReceiptPage({
   params,
@@ -38,6 +42,16 @@ export default async function ReceiptPage({
     timeStyle: "short",
   }).format(closedAt);
 
+  const totalCents = cents(order.total);
+  const refundedCents = order.payments.reduce(
+    (s, p) => s + cents(p.refundedAmount),
+    0,
+  );
+  const hasCard = order.payments.some((p) => p.method === "card");
+  const cardConfigured = Boolean(getStripe());
+
+  const statusBadge = statusBadgeFor(order.status, refundedCents > 0);
+
   return (
     <main className="mx-auto max-w-md px-6 py-12">
       <div className="rounded-2xl border border-[color:var(--color-foreground)]/10 bg-white/70 p-6 shadow-sm">
@@ -56,6 +70,15 @@ export default async function ReceiptPage({
           {order.staff && (
             <div className="mt-1 text-xs text-[color:var(--color-muted)]">
               Served by {order.staff.name}
+            </div>
+          )}
+          {statusBadge && (
+            <div className="mt-3 flex justify-center">
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wider ${statusBadge.cls}`}
+              >
+                {statusBadge.label}
+              </span>
             </div>
           )}
         </header>
@@ -113,27 +136,42 @@ export default async function ReceiptPage({
               muted
             />
           ))}
+          {refundedCents > 0 && (
+            <Row
+              label="Refunded"
+              value={`−${fmtMoney(refundedCents / 100)}`}
+            />
+          )}
+          {refundedCents > 0 && (
+            <div className="flex justify-between border-t border-[color:var(--color-foreground)]/10 pt-2 text-sm font-semibold">
+              <dt>Net to customer</dt>
+              <dd className="tabular-nums">
+                {fmtMoney((totalCents - refundedCents) / 100)}
+              </dd>
+            </div>
+          )}
         </dl>
+
+        {order.notes && (
+          <p className="mt-4 rounded-md bg-[color:var(--color-foreground)]/5 px-3 py-2 text-xs text-[color:var(--color-muted)]">
+            {order.notes}
+          </p>
+        )}
 
         <p className="mt-6 text-center text-xs text-[color:var(--color-muted)]">
           Thanks — see you again soon.
         </p>
       </div>
 
-      <div className="mt-6 flex justify-center gap-3">
-        <Link
-          href={`/pos/${slug}` as never}
-          className="rounded-lg bg-[color:var(--color-foreground)] px-5 py-2.5 text-sm font-semibold text-[color:var(--color-background)] hover:opacity-90"
-        >
-          New order
-        </Link>
-        <Link
-          href={`/admin/${slug}` as never}
-          className="rounded-lg border border-[color:var(--color-foreground)]/15 px-5 py-2.5 text-sm font-medium hover:bg-[color:var(--color-foreground)]/5"
-        >
-          Admin
-        </Link>
-      </div>
+      <ReceiptActions
+        slug={slug}
+        orderId={order.id}
+        status={order.status}
+        totalCents={totalCents}
+        refundedCents={refundedCents}
+        hasCard={hasCard}
+        cardConfigured={cardConfigured}
+      />
     </main>
   );
 }
@@ -153,4 +191,31 @@ function Row({
       <dd className="tabular-nums">{value}</dd>
     </div>
   );
+}
+
+function statusBadgeFor(
+  status: string,
+  hasRefund: boolean,
+): { label: string; cls: string } | null {
+  if (status === "voided")
+    return {
+      label: "Voided",
+      cls: "bg-rose-50 text-rose-900 border border-rose-200",
+    };
+  if (status === "refunded")
+    return {
+      label: "Refunded",
+      cls: "bg-amber-50 text-amber-900 border border-amber-200",
+    };
+  if (status === "open")
+    return {
+      label: "Open",
+      cls: "bg-amber-50 text-amber-900 border border-amber-200",
+    };
+  if (hasRefund && status === "paid")
+    return {
+      label: "Partially refunded",
+      cls: "bg-amber-50 text-amber-900 border border-amber-200",
+    };
+  return null;
 }
