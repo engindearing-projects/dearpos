@@ -48,3 +48,4 @@ packages/db/prisma/migrations/dev/
 
 # Bun
 bun.lockb.bak
+.env*.local

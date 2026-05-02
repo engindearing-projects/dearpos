@@ -10,9 +10,7 @@ const config: NextConfig = {
   turbopack: {
     root: repoRoot,
   },
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
 };
 
 export default config;
