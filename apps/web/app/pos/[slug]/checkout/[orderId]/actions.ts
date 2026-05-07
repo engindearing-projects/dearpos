@@ -3,7 +3,8 @@
 import { db } from "@dearpos/db";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getStripe, allowSimulatedTap } from "@/lib/stripe";
+import { allowSimulatedTap } from "@/lib/stripe";
+import { getProcessor } from "@/lib/payments";
 import { readSession } from "@/lib/session";
 
 // Captures the PaymentIntent server-side, marks the Payment succeeded, and
@@ -61,8 +62,10 @@ export async function captureCardPayment(input: {
   orderId: string;
   paymentIntentId: string;
 }) {
-  const stripe = getStripe();
-  if (!stripe) throw new Error("Stripe is not configured");
+  const processor = getProcessor();
+  if (!processor.isConfigured()) {
+    throw new Error(`Processor '${processor.id}' is not configured`);
+  }
 
   const session = await readSession(input.slug);
   const business = await db.business.findUnique({ where: { slug: input.slug } });
@@ -79,24 +82,16 @@ export async function captureCardPayment(input: {
   });
   if (!payment) throw new Error("Payment not found for this intent");
 
-  const intent = await stripe.paymentIntents.retrieve(input.paymentIntentId);
-  let captured = intent;
-  if (intent.status === "requires_capture") {
-    captured = await stripe.paymentIntents.capture(input.paymentIntentId);
-  }
-  if (captured.status !== "succeeded") {
-    throw new Error(`PaymentIntent ${captured.id} is ${captured.status}`);
-  }
+  const captured = await processor.capture({
+    ref: { processor: processor.id, intentId: input.paymentIntentId },
+  });
 
   await db.$transaction([
     db.payment.update({
       where: { id: payment.id },
       data: {
         status: "succeeded",
-        stripeChargeId:
-          typeof captured.latest_charge === "string"
-            ? captured.latest_charge
-            : (captured.latest_charge?.id ?? null),
+        stripeChargeId: captured.ref.chargeId ?? null,
       },
     }),
     db.order.update({
@@ -104,6 +99,9 @@ export async function captureCardPayment(input: {
       data: { status: "paid", closedAt: new Date() },
     }),
   ]);
+
+  // v0.2 plug: emit OrderClosed here so InventoryComponent deductions run
+  // on the closed order regardless of which processor handled the card.
 
   revalidatePath(`/admin/${input.slug}` as never);
   redirect(`/pos/${input.slug}/receipt/${input.orderId}` as never);
@@ -129,17 +127,14 @@ export async function cancelCardOrder(input: {
     throw new Error("Order is already paid; refund instead");
   }
 
-  // Best-effort cancel of the PaymentIntent. If Stripe is gone or the intent
-  // is already terminal, we still void the local order.
-  const stripe = getStripe();
+  // Best-effort cancel via the processor. If it's gone or the intent is
+  // already terminal, we still void the local order.
+  const processor = getProcessor();
   for (const p of order.payments) {
     if (p.method !== "card" || !p.stripePaymentIntentId) continue;
-    if (!stripe) continue;
-    try {
-      await stripe.paymentIntents.cancel(p.stripePaymentIntentId);
-    } catch {
-      // ignore — covered by the local void below
-    }
+    await processor.cancel({
+      ref: { processor: processor.id, intentId: p.stripePaymentIntentId },
+    });
   }
 
   await db.$transaction([
