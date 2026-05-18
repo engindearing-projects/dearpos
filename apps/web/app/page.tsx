@@ -34,15 +34,21 @@ export default function HomePage() {
       <section className="mt-16">
         <h2 className="text-xl font-semibold">Status</h2>
         <p className="mt-2 text-[color:var(--color-muted)]">
-          v0.1 in active development as of May 2026. Not production-ready yet — but
-          we&rsquo;re picking the first ten Spokane shops to onboard personally.
+          v0.1 in active development as of May 2026. We&rsquo;re onboarding the first
+          Spokane shops now — food trucks, pop-ups, weekend markets.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
+          <a
+            href="/pricing"
+            className="rounded-md bg-[color:var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+          >
+            See hosted plans →
+          </a>
           <a
             href="https://github.com/engindearing-projects/dearpos"
             className="rounded-md bg-[color:var(--color-foreground)] px-5 py-2.5 text-sm font-medium text-[color:var(--color-background)] hover:opacity-90"
           >
-            View on GitHub →
+            Self-host (GitHub) →
           </a>
           <a
             href="mailto:hi@engindearing.soy?subject=DearPOS%20pilot"

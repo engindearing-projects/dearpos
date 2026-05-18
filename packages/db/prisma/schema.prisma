@@ -36,9 +36,43 @@ model Business {
   staff          Staff[]
   orders         Order[]
   shifts         Shift[]
+  subscription   HostedSubscription?
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+// ===== Hosted SaaS billing =====
+
+model HostedSubscription {
+  id                   String    @id @default(cuid())
+  businessId           String?   @unique
+  business             Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  // Stripe identifiers
+  stripeCustomerId     String    @unique
+  stripeSubscriptionId String    @unique
+  stripePriceId        String
+
+  plan                 String    // "starter" | "growth" | "pro"
+  status               String    // "active" | "trialing" | "past_due" | "canceled" | "unpaid"
+
+  // Signup metadata (collected before provisioning; kept for support)
+  ownerEmail           String
+  ownerName            String?
+  businessName         String?
+  businessSlug         String?   // desired slug; final slug lives on Business
+  profile              String?   // "restaurant" | "cafe-retail"
+
+  currentPeriodEnd     DateTime?
+  canceledAt           DateTime?
+
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+  @@index([ownerEmail])
 }
 
 model Location {
