@@ -29,6 +29,7 @@ model Business {
 
   logoUrl        String?
   theme          Json?    // { preset?: string, colors?: { background, foreground, accent, muted } }
+  customDomain   String?  @unique // e.g. "pos.myshop.com" — add CNAME → dearpos.com + add to Vercel project
 
   locations      Location[]
   items          Item[]
