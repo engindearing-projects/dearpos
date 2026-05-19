@@ -3,25 +3,17 @@
 import { redirect } from "next/navigation";
 import { getStripe } from "@/lib/stripe";
 
-const PLAN_PRICES: Record<string, string | undefined> = {
-  starter: process.env.STRIPE_PRICE_STARTER,
-  growth: process.env.STRIPE_PRICE_GROWTH,
-  pro: process.env.STRIPE_PRICE_PRO,
-};
-
-const PLAN_NAMES: Record<string, string> = {
-  starter: "Starter ($29/mo)",
-  growth: "Growth ($59/mo)",
-  pro: "Pro ($99/mo)",
-};
-
 export async function createCheckoutSession(formData: FormData) {
   const stripe = getStripe();
   if (!stripe) {
     throw new Error("Stripe is not configured.");
   }
 
-  const plan = String(formData.get("plan") ?? "starter");
+  const priceId = process.env.STRIPE_PRICE_HOSTED;
+  if (!priceId) {
+    throw new Error("STRIPE_PRICE_HOSTED is not set.");
+  }
+
   const ownerEmail = String(formData.get("email") ?? "").trim();
   const ownerName = String(formData.get("name") ?? "").trim();
   const businessName = String(formData.get("businessName") ?? "").trim();
@@ -29,11 +21,6 @@ export async function createCheckoutSession(formData: FormData) {
 
   if (!ownerEmail || !businessName) {
     throw new Error("Email and business name are required.");
-  }
-
-  const priceId = PLAN_PRICES[plan];
-  if (!priceId) {
-    throw new Error(`No Stripe price configured for plan: ${plan}`);
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -44,11 +31,9 @@ export async function createCheckoutSession(formData: FormData) {
     customer_email: ownerEmail,
     line_items: [{ price: priceId, quantity: 1 }],
     metadata: {
-      plan,
       ownerEmail,
       ownerName,
       businessName,
-      // Slugify: lowercase, spaces → hyphens, strip non-alphanumeric
       businessSlug: businessName
         .toLowerCase()
         .replace(/\s+/g, "-")
@@ -57,11 +42,7 @@ export async function createCheckoutSession(formData: FormData) {
       profile,
     },
     subscription_data: {
-      metadata: {
-        plan,
-        businessName,
-        ownerEmail,
-      },
+      metadata: { businessName, ownerEmail },
     },
     success_url: `${appUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/pricing`,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { db, hashPin } from "@dearpos/db";
+import { sendWelcomeEmail } from "@/lib/email/welcome";
 
 export async function POST(req: Request) {
   const stripe = getStripe();
@@ -59,7 +60,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   if (session.mode !== "subscription" || !session.subscription) return;
 
   const meta = session.metadata ?? {};
-  const plan = meta.plan ?? "starter";
   const ownerEmail = meta.ownerEmail ?? (session.customer_email ?? "");
   const ownerName = meta.ownerName ?? "";
   const businessName = meta.businessName ?? ownerEmail;
@@ -108,13 +108,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     },
   });
 
+  const temporaryPin = "1234";
+
   await db.hostedSubscription.create({
     data: {
       businessId: business.id,
       stripeCustomerId,
       stripeSubscriptionId,
       stripePriceId,
-      plan,
+      plan: "hosted",
       status: stripeSub.status,
       ownerEmail,
       ownerName,
@@ -124,8 +126,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     },
   });
 
-  console.log(`[webhook] provisioned business: ${business.slug} (${plan})`);
-  // TODO: send welcome email via Resend/Postmark with login URL
+  console.log(`[webhook] provisioned business: ${business.slug}`);
+
+  await sendWelcomeEmail({
+    to: ownerEmail,
+    ownerName,
+    businessName,
+    businessSlug,
+    profile,
+    temporaryPin,
+  });
 }
 
 // Stripe v22: invoice.subscription moved to invoice.parent.subscription_details.subscription
@@ -204,8 +214,6 @@ function slugify(name: string): string {
 }
 
 function priceIdToPlan(priceId: string): string | null {
-  if (priceId === process.env.STRIPE_PRICE_STARTER) return "starter";
-  if (priceId === process.env.STRIPE_PRICE_GROWTH) return "growth";
-  if (priceId === process.env.STRIPE_PRICE_PRO) return "pro";
+  if (priceId === process.env.STRIPE_PRICE_HOSTED) return "hosted";
   return null;
 }

@@ -3,25 +3,11 @@ import Link from "next/link";
 import { createCheckoutSession } from "./actions";
 
 export const metadata: Metadata = {
-  title: "Start your DearPOS — DearPOS",
-  description: "Set up your hosted DearPOS account in under 2 minutes.",
+  title: "Get started — DearPOS",
+  description: "Set up your hosted DearPOS account. Live in minutes.",
 };
 
-const PLAN_LABELS: Record<string, string> = {
-  starter: "Starter — $29/mo",
-  growth: "Growth — $59/mo",
-  pro: "Pro — $99/mo",
-};
-
-export default function SignupPage({
-  searchParams,
-}: {
-  searchParams: { plan?: string };
-}) {
-  const plan = searchParams.plan && PLAN_LABELS[searchParams.plan]
-    ? searchParams.plan
-    : "starter";
-
+export default function SignupPage() {
   return (
     <main className="mx-auto max-w-lg px-6 py-20">
       <header className="mb-10">
@@ -32,23 +18,15 @@ export default function SignupPage({
           ← Back to pricing
         </Link>
         <h1 className="mt-6 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-tight">
-          Start your DearPOS
+          Get your DearPOS
         </h1>
         <p className="mt-3 text-[color:var(--color-muted)]">
-          Selected plan:{" "}
-          <span className="font-medium text-[color:var(--color-foreground)]">
-            {PLAN_LABELS[plan]}
-          </span>
-          {" · "}
-          <Link href="/pricing" className="underline underline-offset-4 text-sm">
-            change
-          </Link>
+          $29/mo, cancel anytime. We email you a login link the moment payment
+          clears — no waiting, no manual setup.
         </p>
       </header>
 
       <form action={createCheckoutSession} className="space-y-5">
-        <input type="hidden" name="plan" value={plan} />
-
         <div>
           <label
             htmlFor="businessName"
@@ -106,7 +84,7 @@ export default function SignupPage({
             className="w-full rounded-md border border-[color:var(--color-foreground)]/20 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
           />
           <p className="mt-1 text-xs text-[color:var(--color-muted)]">
-            Used for your Stripe receipt and to reach you during setup.
+            We send your login link here the moment setup is complete.
           </p>
         </div>
 
@@ -119,8 +97,8 @@ export default function SignupPage({
       </form>
 
       <p className="mt-6 text-xs text-[color:var(--color-muted)] text-center">
-        You&rsquo;ll be redirected to Stripe to enter your card. Cancel anytime.
-        No setup fees.
+        Redirecting to Stripe to enter your card. Cancel anytime from the
+        billing portal — no calls, no friction.
       </p>
     </main>
   );
