@@ -49,5 +49,5 @@ export async function createCheckoutSession(formData: FormData) {
     allow_promotion_codes: true,
   });
 
-  redirect(session.url!);
+  redirect(session.url! as never);
 }
