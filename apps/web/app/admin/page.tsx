@@ -2,6 +2,8 @@ import Link from "next/link";
 import { db } from "@dearpos/db";
 import { getProfile } from "@dearpos/core/profiles";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminIndex() {
   const businesses = await db.business.findMany({
     orderBy: { name: "asc" },
