@@ -4,7 +4,7 @@ import { db, Prisma } from "@dearpos/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { readSession } from "@/lib/session";
-import { getStripe } from "@/lib/stripe";
+import { getProcessor } from "@/lib/payments";
 
 const dec = (cents: number) => new Prisma.Decimal(cents).div(100);
 
@@ -34,15 +34,12 @@ export async function voidOrder(input: { slug: string; orderId: string }) {
     throw new Error("Paid orders must be refunded, not voided");
   }
 
-  const stripe = getStripe();
+  const processor = getProcessor();
   for (const p of order.payments) {
     if (p.method !== "card" || !p.stripePaymentIntentId) continue;
-    if (!stripe) continue;
-    try {
-      await stripe.paymentIntents.cancel(p.stripePaymentIntentId);
-    } catch {
-      // ignore — local void below is the source of truth
-    }
+    await processor.cancel({
+      ref: { processor: processor.id, intentId: p.stripePaymentIntentId },
+    });
   }
 
   await db.$transaction([
@@ -91,7 +88,7 @@ export async function refundOrder(input: {
   // payment per order, but the loop is here so split-tender works later.
   let toRefund = input.amountCents;
   const updates: Promise<unknown>[] = [];
-  const stripe = getStripe();
+  const processor = getProcessor();
 
   const payments = [...order.payments].sort(
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
@@ -106,18 +103,18 @@ export async function refundOrder(input: {
     const slice = Math.min(toRefund, refundable);
 
     if (p.method === "card") {
-      if (!stripe) {
+      if (!processor.isConfigured()) {
         throw new Error(
-          "Stripe is not configured — set STRIPE_SECRET_KEY to refund card payments",
+          `Card refunds require the '${processor.id}' processor to be configured`,
         );
       }
       if (!p.stripePaymentIntentId) {
-        throw new Error("Card payment is missing a Stripe PaymentIntent");
+        throw new Error("Card payment is missing a processor reference");
       }
-      await stripe.refunds.create({
-        payment_intent: p.stripePaymentIntentId,
-        amount: slice,
-        reason: "requested_by_customer",
+      await processor.refund({
+        ref: { processor: processor.id, intentId: p.stripePaymentIntentId },
+        amountCents: slice,
+        ...(input.reason ? { reason: input.reason } : {}),
       });
     }
 

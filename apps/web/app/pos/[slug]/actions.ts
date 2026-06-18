@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { startOfBusinessDay } from "@/lib/business-day";
 import { readSession } from "@/lib/session";
-import { getStripe } from "@/lib/stripe";
+import { getProcessor } from "@/lib/payments";
 
 export type CartLineInput = {
   itemId: string;
@@ -158,15 +158,12 @@ export async function createOrder(input: CreateOrderInput) {
 
   const isCard = input.paymentMethod === "card";
 
-  // Card path needs Stripe configured. Fail fast before we write anything.
-  let stripe: ReturnType<typeof getStripe> = null;
-  if (isCard) {
-    stripe = getStripe();
-    if (!stripe) {
-      throw new Error(
-        "Card payments require STRIPE_SECRET_KEY in apps/web/.env.local",
-      );
-    }
+  // Card path needs the processor configured. Fail fast before we write anything.
+  const processor = getProcessor();
+  if (isCard && !processor.isConfigured()) {
+    throw new Error(
+      `Card payments require the '${processor.id}' processor to be configured`,
+    );
   }
 
   const orderLineCreates = rows.map((r) => ({
@@ -231,15 +228,13 @@ export async function createOrder(input: CreateOrderInput) {
     },
   });
 
-  const intent = await stripe!.paymentIntents.create({
-    amount: totals.totalCents,
-    currency: business.currency.toLowerCase(),
-    payment_method_types: ["card_present"],
-    capture_method: "automatic",
-    metadata: {
-      dearpos_order_id: order.id,
-      dearpos_business_id: business.id,
-      dearpos_business_slug: business.slug,
+  const sale = await processor.createSale({
+    orderId: order.id,
+    businessId: business.id,
+    businessSlug: business.slug,
+    amount: {
+      amountCents: totals.totalCents,
+      currency: business.currency,
     },
   });
 
@@ -249,7 +244,7 @@ export async function createOrder(input: CreateOrderInput) {
       method: "card",
       amount: dec(totals.totalCents),
       status: "pending",
-      stripePaymentIntentId: intent.id,
+      stripePaymentIntentId: sale.ref.intentId,
     },
   });
 
